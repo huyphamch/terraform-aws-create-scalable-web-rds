@@ -2,8 +2,10 @@
 <br />A solution is needed in order to handle a lot of http requsts.
 
 ## Solution
-<br />A a load balance to increase horizontal scalability.
-
+<br />Add a load balancer to distribute requests to multiple EC2-instances providing horizontal scalability.
+<br />The EC2-instances are protected in the private subnet and can only be accessed by the load balancer.
+<br />The EC2-instances have access to the internet via their own NAT-Gateway through the Internet Gateway in order to download installation packages like the web-server.
+<br />The database protected in the private subnet and can only be accessed by the EC2-instances.
 ## Prerequisites
 <br /> Build on top of code and results from [Project 1](https://github.com/huyphamch/terraform-aws-create-web-rds)
 

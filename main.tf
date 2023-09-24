@@ -1,6 +1,6 @@
 # Creation Dependencie:
 # VPC - Subnet+IGW - RT
-# VPC - Subnet+EIP - NGW - RT
+# VPC - Subnet+EIP+IGW - NGW - RT
 # VPC - Subnet+SG - EC2
 # AccessKey - EC2
 # VPC - Subnet+SG - LB
@@ -25,7 +25,6 @@ resource "aws_subnet" "subnet-public" {
   vpc_id            = aws_vpc.vpc-cloud-fundamentals.id
   cidr_block        = var.subnet_cidr_public[count.index]
   availability_zone = var.availability_zone[count.index]
-  # map_public_ip_on_launch = true
   tags = {
     "Name" = "subnet-public-${count.index + 1}"
   }
@@ -36,7 +35,6 @@ resource "aws_subnet" "subnet-private" {
   vpc_id                  = aws_vpc.vpc-cloud-fundamentals.id
   cidr_block              = var.subnet_cidr_private[count.index]
   availability_zone       = var.availability_zone[count.index]
-  map_public_ip_on_launch = false
   tags = {
     "Name" = "subnet-private-${count.index + 1}"
   }
@@ -52,18 +50,23 @@ resource "aws_internet_gateway" "igw-web" {
 
 # 4. Create Elastic IP
 resource "aws_eip" "elastic-ip-nat-gateway" {
+  count  = length(var.subnet_cidr_public)
   domain = "vpc"
 
   tags = {
-    Name = "elastic-ip-nat-gateway"
+    Name = "elastic-ip-nat-gateway-${count.index + 1}"
   }
 }
 
 # 5. Create NAT-Gateway
 resource "aws_nat_gateway" "nat_gateway" {
-  allocation_id = aws_eip.elastic-ip-nat-gateway.id
-  subnet_id     = element(aws_subnet.subnet-private.*.id, 0)
-  depends_on    = [aws_nat_gateway.nat_gateway]
+  count         = length(var.subnet_cidr_public)
+  subnet_id     = element(aws_subnet.subnet-public.*.id, count.index)
+  allocation_id = aws_eip.elastic-ip-nat-gateway[count.index].id
+  depends_on    = [aws_internet_gateway.igw-web]
+  tags = {
+    "Name" = "nat_gateway-${count.index + 1}"
+  }
 }
 
 # 6. Create Route-Table
@@ -75,9 +78,10 @@ resource "aws_route_table" "rt-public" {
 }
 
 resource "aws_route_table" "rt-private" {
+  count  = length(var.subnet_cidr_private)
   vpc_id = aws_vpc.vpc-cloud-fundamentals.id
   tags = {
-    Name = "rt-private"
+    "Name" = "app-2-route-table-${count.index + 1}"
   }
 }
 
@@ -89,9 +93,10 @@ resource "aws_route" "incoming-route" {
 }
 
 resource "aws_route" "outcoming-route" {
+  count                  = length(var.subnet_cidr_private)
   destination_cidr_block = "0.0.0.0/0"
-  route_table_id         = aws_route_table.rt-private.id
-  gateway_id             = aws_nat_gateway.nat_gateway.id
+  route_table_id         = aws_route_table.rt-private[count.index].id
+  gateway_id             = aws_nat_gateway.nat_gateway[count.index].id
 }
 
 # 8. Assign subnet to route table
@@ -104,62 +109,12 @@ resource "aws_route_table_association" "public" {
 resource "aws_route_table_association" "private" {
   count          = length(var.subnet_cidr_private)
   subnet_id      = element(aws_subnet.subnet-private.*.id, count.index)
-  route_table_id = aws_route_table.rt-private.id
-}
-
-# 9. Create security group to allow port: Http, Https, SSH, RDP
-resource "aws_security_group" "security-group-web" {
-  name        = "Allow_inbound_traffic"
-  description = "Allow https, http, ssh and rdp inbound traffic"
-  vpc_id      = aws_vpc.vpc-cloud-fundamentals.id
-
-  ingress {
-    description = "HTTPS"
-    from_port   = 443
-    to_port     = 443
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "HTTP"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "SSH"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "RDP"
-    from_port   = 3389
-    to_port     = 3389
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  egress {
-    from_port   = 0
-    to_port     = 0
-    protocol    = "-1"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  tags = {
-    Name = "security-group-web"
-  }
+  route_table_id = aws_route_table.rt-private[count.index].id
 }
 
 resource "aws_security_group" "security-group-load-balancer" {
   name        = "Allow_inbound_traffic_load_balancer"
-  description = "Allow http inbound traffic from the internet to EC2 instances"
+  description = "Allow http inbound traffic from the internet to the load balancer"
   vpc_id      = aws_vpc.vpc-cloud-fundamentals.id
 
   ingress {
@@ -180,9 +135,36 @@ resource "aws_security_group" "security-group-load-balancer" {
   }
 }
 
+# 9. Create security group to allow port: Http, Https, SSH, RDP
+resource "aws_security_group" "security-group-web" {
+  name        = "Allow_inbound_traffic"
+  description = "Allow http inbound traffic from the load balancer to the EC2-instances"
+  vpc_id      = aws_vpc.vpc-cloud-fundamentals.id
+
+  ingress {
+    description = "HTTP"
+    from_port   = 80
+    to_port     = 80
+    protocol    = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]
+   security_groups = [aws_security_group.security-group-load-balancer.id] # Keep the instance private by only allowing traffic from the load balancer.
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "security-group-web"
+  }
+}
+
 resource "aws_security_group" "security-group-database" {
   name        = "Allow_inbound_traffic_database"
-  description = "Allow mysql inbound traffic to database"
+  description = "Allow mysql inbound traffic from the EC2-instances to the database"
   vpc_id      = aws_vpc.vpc-cloud-fundamentals.id
 
   ingress {
@@ -190,7 +172,7 @@ resource "aws_security_group" "security-group-database" {
     to_port         = 3306
     protocol        = "tcp"
     cidr_blocks     = ["0.0.0.0/0"]
-    security_groups = [aws_security_group.security-group-web.id] # Keep the instance private by only allowing traffic from the web server.
+    security_groups = [aws_security_group.security-group-web.id] # Keep the instance private by only allowing traffic from the EC2-instances.
   }
 
   egress {
@@ -206,12 +188,14 @@ resource "aws_security_group" "security-group-database" {
 }
 
 # 10.1 Create Amazon Linux-Apache2 EC2-instances
+# Executing user_data requires internet access. 
+# Make sure that the EC2-instance uses a subnet which has internet access (NAT-Gateway, Internet-Gateway)
 resource "aws_instance" "web-linux" {
   count         = length(var.subnet_cidr_public)
   ami           = "ami-03a6eaae9938c858c"
   instance_type = "t2.micro"
   key_name      = aws_key_pair.key_pair.key_name
-  subnet_id     = element(aws_subnet.subnet-public.*.id, count.index)
+  subnet_id     = element(aws_subnet.subnet-private.*.id, count.index)
   # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/instance#associate_public_ip_address
   associate_public_ip_address = true
   vpc_security_group_ids      = [aws_security_group.security-group-web.id]
@@ -223,12 +207,14 @@ resource "aws_instance" "web-linux" {
 }
 
 # 10.2 Create Windows-IIS EC2-instances
+# Executing user_data requires internet access. 
+# Make sure that the EC2-instance uses a subnet which has internet access (NAT-Gateway, Internet-Gateway)
 resource "aws_instance" "web-windows" {
   count         = length(var.subnet_cidr_public)
   ami           = "ami-0be0e902919675894"
   instance_type = "t2.micro"
   key_name      = aws_key_pair.key_pair.key_name
-  subnet_id     = element(aws_subnet.subnet-public.*.id, count.index)
+  subnet_id     = element(aws_subnet.subnet-private.*.id, count.index)
   # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/instance#associate_public_ip_address
   associate_public_ip_address = true
   vpc_security_group_ids      = [aws_security_group.security-group-web.id]
@@ -242,7 +228,7 @@ resource "aws_instance" "web-windows" {
 # 11. Create Target Group
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb_target_group
 resource "aws_lb_target_group" "target-group-front" {
-  name     = "application-front"
+  name     = "web-front"
   port     = 80
   protocol = "HTTP"
   vpc_id   = aws_vpc.vpc-cloud-fundamentals.id
@@ -333,24 +319,24 @@ resource "aws_db_subnet_group" "db-subnet-group-mysql" {
 * multi_az: Specifies if the RDS instance is multi-AZ
 * skip_final_snapshot: Determines whether a final DB snapshot is created before the DB instance is deleted. If true is specified, no DBSnapshot is created. If false is specified, a DB snapshot is created before the DB instance is deleted, using the value from final_snapshot_identifier. Default is false
  */
-resource "aws_db_instance" "db-mysql" {
-  identifier                  = "db-mysql-instance"
-  allocated_storage           = 20
-  storage_type                = "gp2"
-  engine                      = "mysql"
-  engine_version              = "8.0.33"
-  instance_class              = "db.t2.micro"
-  username                    = "admin"
-  password                    = "admnin123"
-  parameter_group_name        = "default.mysql8.0"
-  db_subnet_group_name        = aws_db_subnet_group.db-subnet-group-mysql.name
-  vpc_security_group_ids      = [aws_security_group.security-group-database.id]
-  allow_major_version_upgrade = true
-  auto_minor_version_upgrade  = true
-  backup_retention_period     = 35
-  backup_window               = "22:00-23:00"
-  maintenance_window          = "Sat:00:00-Sat:03:00"
-  multi_az                    = true
-  skip_final_snapshot         = true
-  publicly_accessible         = true
-}
+# resource "aws_db_instance" "db-mysql" {
+#   identifier                  = "db-mysql-instance"
+#   allocated_storage           = 20
+#   storage_type                = "gp2"
+#   engine                      = "mysql"
+#   engine_version              = "8.0.33"
+#   instance_class              = "db.t2.micro"
+#   username                    = "admin"
+#   password                    = "admnin123"
+#   parameter_group_name        = "default.mysql8.0"
+#   db_subnet_group_name        = aws_db_subnet_group.db-subnet-group-mysql.name
+#   vpc_security_group_ids      = [aws_security_group.security-group-database.id]
+#   allow_major_version_upgrade = true
+#   auto_minor_version_upgrade  = true
+#   backup_retention_period     = 35
+#   backup_window               = "22:00-23:00"
+#   maintenance_window          = "Sat:00:00-Sat:03:00"
+#   multi_az                    = true
+#   skip_final_snapshot         = true
+#   publicly_accessible         = true
+# }
