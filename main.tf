@@ -188,7 +188,7 @@ resource "aws_security_group" "security-group-database" {
 }
 
 # 10.1 Create Amazon Linux-Apache2 EC2-instances
-# Executing user_data requires internet access. 
+# Executing user_data requires internet access to install web-server. 
 # Make sure that the EC2-instance uses a subnet which has internet access (NAT-Gateway, Internet-Gateway)
 resource "aws_instance" "web-linux" {
   count         = length(var.subnet_cidr_public)
@@ -207,7 +207,7 @@ resource "aws_instance" "web-linux" {
 }
 
 # 10.2 Create Windows-IIS EC2-instances
-# Executing user_data requires internet access. 
+# Executing user_data requires internet access to install web-server. 
 # Make sure that the EC2-instance uses a subnet which has internet access (NAT-Gateway, Internet-Gateway)
 resource "aws_instance" "web-windows" {
   count         = length(var.subnet_cidr_public)
@@ -319,24 +319,24 @@ resource "aws_db_subnet_group" "db-subnet-group-mysql" {
 * multi_az: Specifies if the RDS instance is multi-AZ
 * skip_final_snapshot: Determines whether a final DB snapshot is created before the DB instance is deleted. If true is specified, no DBSnapshot is created. If false is specified, a DB snapshot is created before the DB instance is deleted, using the value from final_snapshot_identifier. Default is false
  */
-# resource "aws_db_instance" "db-mysql" {
-#   identifier                  = "db-mysql-instance"
-#   allocated_storage           = 20
-#   storage_type                = "gp2"
-#   engine                      = "mysql"
-#   engine_version              = "8.0.33"
-#   instance_class              = "db.t2.micro"
-#   username                    = "admin"
-#   password                    = "admnin123"
-#   parameter_group_name        = "default.mysql8.0"
-#   db_subnet_group_name        = aws_db_subnet_group.db-subnet-group-mysql.name
-#   vpc_security_group_ids      = [aws_security_group.security-group-database.id]
-#   allow_major_version_upgrade = true
-#   auto_minor_version_upgrade  = true
-#   backup_retention_period     = 35
-#   backup_window               = "22:00-23:00"
-#   maintenance_window          = "Sat:00:00-Sat:03:00"
-#   multi_az                    = true
-#   skip_final_snapshot         = true
-#   publicly_accessible         = true
-# }
+resource "aws_db_instance" "db-mysql" {
+  identifier                  = "db-mysql-instance"
+  allocated_storage           = 20
+  storage_type                = "gp2"
+  engine                      = "mysql"
+  engine_version              = "8.0.33"
+  instance_class              = "db.t2.micro"
+  username                    = "admin"
+  password                    = "admnin123"
+  parameter_group_name        = "default.mysql8.0"
+  db_subnet_group_name        = aws_db_subnet_group.db-subnet-group-mysql.name
+  vpc_security_group_ids      = [aws_security_group.security-group-database.id]
+  allow_major_version_upgrade = true
+  auto_minor_version_upgrade  = true
+  backup_retention_period     = 35
+  backup_window               = "22:00-23:00"
+  maintenance_window          = "Sat:00:00-Sat:03:00"
+  multi_az                    = true
+  skip_final_snapshot         = true
+  publicly_accessible         = true
+}
