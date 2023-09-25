@@ -4,7 +4,7 @@
 # VPC - Subnet+SG - EC2
 # AccessKey - EC2
 # VPC - Subnet+SG - LB
-# VPC - EC2 - TG - LB
+# VPC - TG+Template+LB - ASG
 # VPC - Subnet+SG+DBSubnetGroup - RDS
 
 # 1. Create VPC
@@ -31,10 +31,10 @@ resource "aws_subnet" "subnet-public" {
 }
 
 resource "aws_subnet" "subnet-private" {
-  count                   = length(var.subnet_cidr_private)
-  vpc_id                  = aws_vpc.vpc-cloud-fundamentals.id
-  cidr_block              = var.subnet_cidr_private[count.index]
-  availability_zone       = var.availability_zone[count.index]
+  count             = length(var.subnet_cidr_private)
+  vpc_id            = aws_vpc.vpc-cloud-fundamentals.id
+  cidr_block        = var.subnet_cidr_private[count.index]
+  availability_zone = var.availability_zone[count.index]
   tags = {
     "Name" = "subnet-private-${count.index + 1}"
   }
@@ -112,6 +112,7 @@ resource "aws_route_table_association" "private" {
   route_table_id = aws_route_table.rt-private[count.index].id
 }
 
+# 9. Create security group to allow incoming traffic
 resource "aws_security_group" "security-group-load-balancer" {
   name        = "Allow_inbound_traffic_load_balancer"
   description = "Allow http inbound traffic from the internet to the load balancer"
@@ -135,19 +136,18 @@ resource "aws_security_group" "security-group-load-balancer" {
   }
 }
 
-# 9. Create security group to allow port: Http, Https, SSH, RDP
 resource "aws_security_group" "security-group-web" {
   name        = "Allow_inbound_traffic"
   description = "Allow http inbound traffic from the load balancer to the EC2-instances"
   vpc_id      = aws_vpc.vpc-cloud-fundamentals.id
 
   ingress {
-    description = "HTTP"
-    from_port   = 80
-    to_port     = 80
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-   security_groups = [aws_security_group.security-group-load-balancer.id] # Keep the instance private by only allowing traffic from the load balancer.
+    description     = "HTTP"
+    from_port       = 80
+    to_port         = 80
+    protocol        = "tcp"
+    cidr_blocks     = ["0.0.0.0/0"]
+    security_groups = [aws_security_group.security-group-load-balancer.id] # Keep the instance private by only allowing traffic from the load balancer.
   }
 
   egress {
@@ -187,45 +187,7 @@ resource "aws_security_group" "security-group-database" {
   }
 }
 
-# 10.1 Create Amazon Linux-Apache2 EC2-instances
-# Executing user_data requires internet access to install web-server. 
-# Make sure that the EC2-instance uses a subnet which has internet access (NAT-Gateway, Internet-Gateway)
-resource "aws_instance" "web-linux" {
-  count         = length(var.subnet_cidr_public)
-  ami           = "ami-03a6eaae9938c858c"
-  instance_type = "t2.micro"
-  key_name      = aws_key_pair.key_pair.key_name
-  subnet_id     = element(aws_subnet.subnet-private.*.id, count.index)
-  # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/instance#associate_public_ip_address
-  associate_public_ip_address = true
-  vpc_security_group_ids      = [aws_security_group.security-group-web.id]
-  user_data                   = file("user_data/user_data_linux.tpl")
-
-  tags = {
-    Name = "web-linux-${count.index + 1}"
-  }
-}
-
-# 10.2 Create Windows-IIS EC2-instances
-# Executing user_data requires internet access to install web-server. 
-# Make sure that the EC2-instance uses a subnet which has internet access (NAT-Gateway, Internet-Gateway)
-resource "aws_instance" "web-windows" {
-  count         = length(var.subnet_cidr_public)
-  ami           = "ami-0be0e902919675894"
-  instance_type = "t2.micro"
-  key_name      = aws_key_pair.key_pair.key_name
-  subnet_id     = element(aws_subnet.subnet-private.*.id, count.index)
-  # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/instance#associate_public_ip_address
-  associate_public_ip_address = true
-  vpc_security_group_ids      = [aws_security_group.security-group-web.id]
-  user_data                   = file("user_data/user_data_windows.tpl")
-
-  tags = {
-    Name = "web-windows-${count.index + 1}"
-  }
-}
-
-# 11. Create Target Group
+# 10. Create Target Group
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb_target_group
 resource "aws_lb_target_group" "target-group-front" {
   name     = "web-front"
@@ -245,25 +207,7 @@ resource "aws_lb_target_group" "target-group-front" {
   }
 }
 
-# 12.1 Add Windows EC2-instances to created Target Group
-# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb_target_group_attachment
-resource "aws_lb_target_group_attachment" "attach-web-linux" {
-  count            = length(aws_instance.web-linux)
-  target_group_arn = aws_lb_target_group.target-group-front.arn
-  target_id        = element(aws_instance.web-linux.*.id, count.index)
-  port             = 80
-}
-
-# 12.2 Add Windows EC2-instances to created Target Group
-# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb_target_group_attachment
-resource "aws_lb_target_group_attachment" "attach-web-windows" {
-  count            = length(aws_instance.web-windows)
-  target_group_arn = aws_lb_target_group.target-group-front.arn
-  target_id        = element(aws_instance.web-windows.*.id, count.index)
-  port             = 80
-}
-
-# 13. Add Load Balancer
+# 11. Add Load Balancer
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb
 resource "aws_lb" "load-balancer-front" {
   name               = "front"
@@ -279,8 +223,7 @@ resource "aws_lb" "load-balancer-front" {
   }
 }
 
-
-# 14. Add Target Group to Load Balancer
+# 12. Add Target Group to Load Balancer
 # https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/lb_listener
 resource "aws_lb_listener" "front_end" {
   load_balancer_arn = aws_lb.load-balancer-front.arn
@@ -290,6 +233,110 @@ resource "aws_lb_listener" "front_end" {
   default_action {
     type             = "forward"
     target_group_arn = aws_lb_target_group.target-group-front.arn
+  }
+}
+
+# 13. Create Amazon Linux-Apache2 EC2-template for auto-scaling
+resource "aws_launch_template" "launch-template-web" {
+  image_id      = "ami-03a6eaae9938c858c" # windows: "ami-0be0e902919675894"
+  instance_type = "t2.micro"
+  user_data     = filebase64("./user_data/user_data_linux.tpl") # windows: filebase64("./user_data/user_data_windows.tpl")
+  vpc_security_group_ids = [ aws_security_group.security-group-web.id ]
+/*   network_interfaces {
+    security_groups = [aws_security_group.security-group-web.id]
+  } */
+}
+ 
+# 14. Create auto scaling group
+resource "aws_autoscaling_group" "autoscaling-group-web" {
+  name                      = "Auto scaling web-instances"
+  min_size                  = 2
+  max_size                  = 4
+  desired_capacity          = 2
+  health_check_grace_period = 480
+  launch_template {
+    id      = aws_launch_template.launch-template-web.id
+    version = aws_launch_template.launch-template-web.latest_version
+  }
+  vpc_zone_identifier = aws_subnet.subnet-private.*.id
+  health_check_type   = "ELB"
+  depends_on    = [aws_lb.load-balancer-front] # Wait at least 1min, if creation of EC2-instances starts too early, Authentification Failed error occurs.
+
+  # The lifecycle block specifies that the autoscaling group should not scale down the instances if a scale-out activity is in effect while redeploying
+  lifecycle {
+    ignore_changes = [desired_capacity, target_group_arns]
+  }
+
+  # instance_refresh property ensures that newer instances are rolled out when a more recent version of the launch_template is available.
+  instance_refresh {
+    strategy = "Rolling"
+    preferences {
+      min_healthy_percentage = 50
+      skip_matching          = true
+    }
+  }
+
+  tag {
+    key                 = "Name"
+    value               = "autoscaling-group-web"
+    propagate_at_launch = true
+  }
+}
+
+resource "aws_autoscaling_policy" "asg_policy_up" {
+  name                   = "asg_policy_up"
+  scaling_adjustment     = 1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
+  autoscaling_group_name = aws_autoscaling_group.autoscaling-group-web.name
+}
+resource "aws_cloudwatch_metric_alarm" "asg_cpu_alarm_up" {
+  alarm_name          = "asg_cpu_alarm_up"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "60"
+  statistic           = "Average"
+  threshold           = "70"
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.autoscaling-group-web.name
+  }
+  alarm_description = "This metric monitors ec2 cpu utilization"
+  alarm_actions     = [aws_autoscaling_policy.asg_policy_up.arn]
+}
+
+resource "aws_autoscaling_policy" "asg_policy_down" {
+  name                   = "asg_policy_down"
+  scaling_adjustment     = -1
+  adjustment_type        = "ChangeInCapacity"
+  cooldown               = 300
+  autoscaling_group_name = aws_autoscaling_group.autoscaling-group-web.name
+}
+
+resource "aws_cloudwatch_metric_alarm" "asg_cpu_alarm_down" {
+  alarm_name          = "asg_cpu_alarm_down"
+  comparison_operator = "GreaterThanOrEqualToThreshold"
+  evaluation_periods  = "2"
+  metric_name         = "CPUUtilization"
+  namespace           = "AWS/EC2"
+  period              = "60"
+  statistic           = "Average"
+  threshold           = "30"
+  dimensions = {
+    AutoScalingGroupName = aws_autoscaling_group.autoscaling-group-web.name
+  }
+  alarm_description = "This metric monitors ec2 cpu utilization"
+  alarm_actions     = [aws_autoscaling_policy.asg_policy_down.arn]
+}
+
+# Attach Target Group to Auto-Scaling
+# https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/autoscaling_attachment
+resource "aws_autoscaling_attachment" "attach-web" {
+  autoscaling_group_name = aws_autoscaling_group.autoscaling-group-web.id
+  lb_target_group_arn    = aws_lb_target_group.target-group-front.arn
+  lifecycle {
+    create_before_destroy = true
   }
 }
 

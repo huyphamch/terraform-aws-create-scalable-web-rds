@@ -3,7 +3,8 @@
 
 ## Solution
 ![Image](https://github.com/huyphamch/terraform-aws-create-scalable-web-rds/blob/master/diagrams/AWS_architecture.drawio.png)
-<br />Add a load balancer to distribute requests to multiple EC2-instances providing horizontal scalability.
+<br />Add a load balancer to distribute requests to multiple EC2-instances and ensure responsiveness of the website.
+<br />Add auto-scaling to dynamically increase/decrease EC2-instances based on CPU usage to support horizontal scalability.
 <br />The EC2-instances are protected in the private subnet and can only be accessed by the load balancer.
 <br />The EC2-instances have access to the internet via their own NAT-Gateway through the Internet Gateway in order to download installation packages like the web-server.
 <br />The database protected in the private subnet and can only be accessed by the EC2-instances.
