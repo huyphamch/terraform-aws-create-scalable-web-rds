@@ -5,6 +5,7 @@
 # AccessKey - EC2
 # VPC - Subnet+SG - LB
 # VPC - TG+Template+LB - ASG
+# VPC - LB - R53
 # VPC - Subnet+SG+DBSubnetGroup - RDS
 
 # 1. Create VPC
@@ -197,7 +198,7 @@ resource "aws_lb_target_group" "target-group-front" {
   health_check {
     enabled             = true
     healthy_threshold   = 3
-    interval            = 10
+    interval            = 30
     matcher             = 200
     path                = "/"
     port                = "traffic-port"
@@ -340,14 +341,41 @@ resource "aws_autoscaling_attachment" "attach-web" {
   }
 }
 
-# 15. Create Database Subnet Group
+# 15. Create Route53 to redirect domain name requests to load balancer.
+# Make sure, that the domain name of the nameservers from the Record is set in the domain like godaddy.com
+resource "aws_route53_zone" "primary" {
+  name = var.domain_name
+  comment = "primary host zone"
+
+  # Private host zone
+/*   vpc {
+    vpc_id = aws_vpc.vpc-cloud-fundamentals.id
+  } */
+}
+
+resource "aws_route53_record" "www" {
+  zone_id = aws_route53_zone.primary.zone_id
+  name    = var.domain_name
+  type    = "A"
+
+  alias {
+    name                   = aws_lb.load-balancer-front.dns_name
+    zone_id                = aws_lb.load-balancer-front.zone_id
+    evaluate_target_health = true
+  }
+
+  depends_on    = [aws_autoscaling_group.autoscaling-group-web] # Wait at least 1min, if creation of EC2-instances starts too early, Authentification Failed error occurs.
+}
+
+
+# 16. Create Database Subnet Group
 resource "aws_db_subnet_group" "db-subnet-group-mysql" {
   name       = "db-subnet-group-mysql"
   subnet_ids = aws_subnet.subnet-private.*.id
 }
 
 /* 
-* 16. Create a RDS Database Instance
+* 17. Create a RDS Database Instance
 * allocated_storage: This is the amount in GB
 * storage_type: Type of storage we want to allocate(options avilable "standard" (magnetic), "gp2" (general purpose SSD), or "io1" (provisioned IOPS SSD)
 * engine: Database engine(for supported values check https://docs.aws.amazon.com/AmazonRDS/latest/APIReference/API_CreateDBInstance.html) eg: Oracle, Amazon Aurora,Postgres 
@@ -366,7 +394,7 @@ resource "aws_db_subnet_group" "db-subnet-group-mysql" {
 * multi_az: Specifies if the RDS instance is multi-AZ
 * skip_final_snapshot: Determines whether a final DB snapshot is created before the DB instance is deleted. If true is specified, no DBSnapshot is created. If false is specified, a DB snapshot is created before the DB instance is deleted, using the value from final_snapshot_identifier. Default is false
  */
-resource "aws_db_instance" "db-mysql" {
+/* resource "aws_db_instance" "db-mysql" {
   identifier                  = "db-mysql-instance"
   allocated_storage           = 20
   storage_type                = "gp2"
@@ -386,4 +414,4 @@ resource "aws_db_instance" "db-mysql" {
   multi_az                    = true
   skip_final_snapshot         = true
   publicly_accessible         = true
-}
+} */
