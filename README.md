@@ -23,6 +23,7 @@
 <br /> 3. Now you can apply the terraform changes.
 <br /> terraform init
 <br /> terraform apply --auto-approve
+<br /> Note: Update the nameservers from Route53 record in the domain to redirect requests to AWS Route53 nameservers.
 <br /> Result: Calling the URL from the web browser should display the static web page
 <br /> 4. At the end you can cleanup the created AWS resources.
 <br /> terraform destroy --auto-approve

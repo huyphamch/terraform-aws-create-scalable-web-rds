@@ -394,7 +394,7 @@ resource "aws_db_subnet_group" "db-subnet-group-mysql" {
 * multi_az: Specifies if the RDS instance is multi-AZ
 * skip_final_snapshot: Determines whether a final DB snapshot is created before the DB instance is deleted. If true is specified, no DBSnapshot is created. If false is specified, a DB snapshot is created before the DB instance is deleted, using the value from final_snapshot_identifier. Default is false
  */
-/* resource "aws_db_instance" "db-mysql" {
+resource "aws_db_instance" "db-mysql" {
   identifier                  = "db-mysql-instance"
   allocated_storage           = 20
   storage_type                = "gp2"
@@ -414,4 +414,4 @@ resource "aws_db_subnet_group" "db-subnet-group-mysql" {
   multi_az                    = true
   skip_final_snapshot         = true
   publicly_accessible         = true
-} */
+}
