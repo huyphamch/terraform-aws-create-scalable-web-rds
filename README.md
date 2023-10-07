@@ -1,5 +1,5 @@
 ## Objectives
-<br />A solution is needed in order to handle a lot of http requsts in an secure environment.
+<br />A solution is needed in order to handle a lot of http requsts in a secure environment.
 
 ## Solution
 ![Image](https://github.com/huyphamch/terraform-aws-create-scalable-web-rds/blob/master/diagrams/AWS_architecture.drawio.png)
