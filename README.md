@@ -1,4 +1,11 @@
+## Description
+James, a systems engineer at a startup company, is tasked with developing a web application with a secure, robust, and scalable backend database.
+<br />The company plans to utilize AWS RDS for the database, while the application will be deployed on an EC2 instance.
+<br />James must ensure a secure VPC setup where the EC2 instance resides in the public subnet and the RDS DB instance in a private subnet.
+
 ## Objectives
+As a cloud architect, your objective is to assist James in developing an AWS VPC that hosts both an EC2 instance and a database instance.
+<br />The EC2 instance, serving the web application, should be placed in a public subnet, while the DB instance should be secured in a private subnet.
 <br />A solution is needed in order to handle a lot of http requsts in a secure environment.
 
 ## Solution
@@ -6,7 +13,7 @@
 <br />Add Route53 to redirect domain name requests to load balancer.
 <br />Add a load balancer to distribute requests to multiple EC2-instances via auto-scaling and ensure responsiveness of the website.
 <br />Add auto-scaling to handle requests from the load balancer and dynamically increase/decrease EC2-instances based on CPU usage to support horizontal scalability.
-<br />The EC2-instances are protected in the private subnet and can only be accessed by the load balancer.
+<br />The EC2-instances are better protected in the private subnet and can only be accessed by the load balancer.
 <br />The EC2-instances have access to the internet via their own NAT-Gateway through the Internet Gateway in order to download installation packages like the web-server.
 <br />The database protected in the private subnet and can only be accessed by the EC2-instances.
 ## Prerequisites
