@@ -1,11 +1,10 @@
 ## Description
-James, a systems engineer at a startup company, is tasked with developing a web application with a secure, robust, and scalable backend database.
+James, a systems engineer at a startup company, is tasked with developing a secure, robust, and scalable web application and backend database.
 <br />The company plans to utilize AWS RDS for the database, while the application will be deployed on an EC2 instance.
-<br />James must ensure a secure VPC setup where the EC2 instance resides in the public subnet and the RDS DB instance in a private subnet.
+<br />James must ensure a secure VPC setup where the EC2 instance and the RDS DB instance reside in a private subnet.
 
 ## Objectives
 As a cloud architect, your objective is to assist James in developing an AWS VPC that hosts both an EC2 instance and a database instance.
-<br />The EC2 instance, serving the web application, should be placed in a public subnet, while the DB instance should be secured in a private subnet.
 <br />A solution is needed in order to handle a lot of http requsts in a secure environment.
 
 ## Solution
